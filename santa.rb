@@ -1,6 +1,27 @@
 require 'pry'
 require 'csv'
 require 'base64'
+require 'openssl'
+require 'digest'
+
+
+module Encryption
+  def encrypt(key, data)
+    key = Digest::SHA256.digest(key) if(key.kind_of?(String) && 32 != key.bytesize)
+    aes = OpenSSL::Cipher.new('AES-256-CBC')
+    aes.encrypt
+    aes.key = key
+    aes.update(data) + aes.final
+  end
+
+  def decrypt(key, data)
+    key = Digest::SHA256.digest(key) if(key.kind_of?(String) && 32 != key.bytesize)
+    aes = OpenSSL::Cipher.new('AES-256-CBC')
+    aes.decrypt
+    aes.key = key
+    aes.update(data) + aes.final
+  end
+end
 
 module Validations
   def numerical?(number)
@@ -27,6 +48,7 @@ end
 class SecretSanta
   include Validations
   include SantaHelper
+  include Encryption
   attr_reader :group
   
   def initialize
@@ -62,16 +84,24 @@ class SecretSanta
   def save
     @group.user ||= set_user
     @password ||= set_password
-    CSV.open('secret_santa.csv', 'a+', headers: true) do |file|
-      data = [Base64.encode64(@group.user), Base64.encode64(@password), Marshal.dump(@group)]
-      previous_data = file.find {|row| row['user'] == Base64.encode64(@group.user)}
+    CSV.open('secret_santa.csv', 'a+', encoding: 'iso-8859-1', headers: true) do |file|
+      data = [@group.user, encrypt( @password, Marshal.dump(@group))]
+      previous_data = file.find {|row| row['user'] == @group.user}
       if previous_data
-        previous_data = data
+        if decrypt(@password, previous_data['group'])
+          previous_data = data
+        end
       else
-        file.puts data
+        write_data(@group, @password)
       end
     end
     puts "Successfully saved group"
+  end
+
+  def write_data(group, key)
+    CSV.open('secret_santa.csv', 'a', headers: true) do |file|
+      file.puts [group.user, encrypt(key, Marshal.dump(group))]
+    end
   end
 
   def load_group
@@ -87,10 +117,14 @@ class SecretSanta
   end
 
   def login(user, password)
-    CSV.foreach('secret_santa.csv', headers: true) do |row|
-      if row['password'] == Base64.encode64(password) && row['user'] == Base64.encode64(user)
-        @group = Marshal.load(row['group'])
-        return true
+    CSV.foreach('secret_santa.csv', encoding: 'iso-8859-1', headers: true) do |row|
+      if row['user'] == user
+        begin
+          @group = Marshal.load(decrypt(password, row['group']))
+          return true
+        rescue
+          return false
+        end
       end
     end
     false
@@ -277,6 +311,6 @@ class ParticipantReader
       end
     end
   end
-
 end
+
 
