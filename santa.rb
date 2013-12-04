@@ -55,7 +55,7 @@ class SecretSanta
       end
     else
       puts 'Not a valid choice'
-      choose_option(gets.chomp)
+      choose_option(gets.chomp.to_i)
     end
   end
 
