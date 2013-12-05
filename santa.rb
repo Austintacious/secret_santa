@@ -237,7 +237,7 @@ class SecretSanta
       file
     else
       puts 'Sorry that\'s not a valid txt file'
-      get_file_name
+      main_menu
     end
   end
   
