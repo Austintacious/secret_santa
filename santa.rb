@@ -1,4 +1,3 @@
-require 'pry'
 require 'csv'
 require 'base64'
 require 'openssl'
